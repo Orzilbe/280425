@@ -30,7 +30,7 @@ export default function Topics() {
   const [topics, setTopics] = useState<Topic[]>([]);
   const [userData, setUserData] = useState<UserData>({
     level: "",
-    points: 0, // תיקון השדה הריק
+    points: 0,
     totalScore: 0,
     completedTasks: 0,
     activeSince: "",
@@ -43,6 +43,28 @@ export default function Topics() {
   const { isAuthenticated, isLoading, user } = useAuth();
   const router = useRouter();
   
+  // Add detailed logging for user role check
+  console.log('User data for admin check:', {
+    user,
+    role: user?.role,
+    UserRole: user?.UserRole,
+    rawUser: JSON.stringify(user)
+  });
+  
+  // Check both role and UserRole fields, and handle case-insensitive comparison
+  const isAdmin = Boolean(
+    user?.role?.toLowerCase() === 'admin' || 
+    user?.UserRole?.toLowerCase() === 'admin'
+  );
+  
+  console.log('Admin check result:', {
+    isAdmin,
+    roleCheck: user?.role?.toLowerCase() === 'admin',
+    UserRoleCheck: user?.UserRole?.toLowerCase() === 'admin',
+    roleValue: user?.role,
+    UserRoleValue: user?.UserRole
+  });
+
   const handleLogout = () => {
     clearAuthToken();
     router.push('/login');
@@ -185,7 +207,32 @@ export default function Topics() {
           </div>
         </div>
 
-        {/* Hall of Fame Button - כפתור חדש */}
+        {/* Dashboard Button - מוצג רק למנהלים */}
+        {isAdmin && (
+          <div className="flex justify-center mb-4">
+            <Link 
+              href="/dashboard"
+              onClick={(e) => {
+                console.log('Dashboard link clicked');
+                const token = localStorage.getItem('token');
+                if (!token) {
+                  e.preventDefault();
+                  console.error('No token found in localStorage');
+                  return;
+                }
+                // Add token to headers for the next request
+                const headers = new Headers();
+                headers.append('Authorization', `Bearer ${token}`);
+              }}
+              className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-700 text-white font-semibold rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 flex items-center cursor-pointer"
+            >
+              <span className="mr-2 text-xl">📊</span>
+              <span>Dashboard</span>
+            </Link>
+          </div>
+        )}
+
+        {/* Hall of Fame Button */}
         <div className="flex justify-center mb-8">
           <Link href="/hall-of-fame">
             <div className="px-6 py-3 bg-gradient-to-r from-amber-400 to-amber-600 text-white font-semibold rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 flex items-center">

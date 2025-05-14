@@ -40,10 +40,16 @@ declare global {
 }
 
 interface ConversationMessage {
-  type: 'user' | 'ai';
+  type: 'user' | 'ai' | 'feedback';
   content: string;
   feedback?: string;
   score?: number;
+  corrections?: {
+    pronunciation?: string[];
+    grammar?: string[];
+    suggestions?: string[];
+  };
+  isTemporary?: boolean;
 }
 
 interface WordUsage {
@@ -58,6 +64,11 @@ interface FeedbackResponse {
   usedWords: WordUsage[];
   nextQuestion: string;
   score: number;
+  corrections?: {
+    pronunciation?: string[];
+    grammar?: string[];
+    suggestions?: string[];
+  };
 }
 
 // הגדרה של פרופיל ברירת מחדל
@@ -156,8 +167,8 @@ const topicResponses: Record<string, {
   }
 };
 
-// This is an improved version of the fallback response generator
-const generateFallbackResponse = (userInput: string, topicName: string, requiredWords: string[]): FeedbackResponse => {
+// Enhanced feedback generator with corrections and suggestions
+const generateFeedbackResponse = (userInput: string, topicName: string, requiredWords: string[]): FeedbackResponse => {
   // Determine which topic template to use
   const topicKey = Object.keys(topicResponses).find(key => 
     topicName.toLowerCase().includes(key)
@@ -165,17 +176,19 @@ const generateFallbackResponse = (userInput: string, topicName: string, required
   
   const templates = topicResponses[topicKey];
   
-  // Generate more meaningful random responses
+  // Generate response components
   const randomPhrase = templates.phrases[Math.floor(Math.random() * templates.phrases.length)];
   const randomQuestion = templates.questions[Math.floor(Math.random() * templates.questions.length)];
   const randomFeedback = templates.feedback[Math.floor(Math.random() * templates.feedback.length)];
-  const [lastQuestionTime, setLastQuestionTime] = useState<number>(0);
-
-  // Check if user mentioned certain keywords to make response more relevant
+  
+  // Analyze user input for corrections
+  const corrections = analyzeUserSpeech(userInput);
+  
+  // Create supportive feedback with corrections
   const lowerInput = userInput.toLowerCase();
   let customResponse = randomPhrase;
-  const shouldAskNewQuestion = Date.now() - lastQuestionTime > 10000; // 10 seconds threshold
-
+  
+  // Make response more contextual
   if (lowerInput.includes('future') || lowerInput.includes('next') || lowerInput.includes('coming')) {
     customResponse = "Your thoughts about future developments are interesting! " + randomPhrase;
   } else if (lowerInput.includes('problem') || lowerInput.includes('challenge') || lowerInput.includes('difficult')) {
@@ -184,22 +197,42 @@ const generateFallbackResponse = (userInput: string, topicName: string, required
     customResponse = "You've noted some significant benefits. " + randomPhrase;
   }
   
+  // Include corrections in feedback in a supportive way
+  let correctionsFeedback = '';
+  if (corrections.pronunciation.length > 0) {
+    correctionsFeedback += `Quick tip: ${corrections.pronunciation[0]} `;
+  }
+  if (corrections.grammar.length > 0) {
+    correctionsFeedback += `You might also try: "${corrections.grammar[0]}" `;
+  }
+  if (corrections.suggestions.length > 0) {
+    correctionsFeedback += `Consider using: ${corrections.suggestions[0]}. `;
+  }
+  
   // Include used word analysis in feedback
   const requiredWordsAnalysis = requiredWords
     .filter(word => lowerInput.includes(word.toLowerCase()))
     .map(word => `Great use of "${word}"!`)
     .join(' ');
   
-  const enhancedFeedback = requiredWordsAnalysis 
-    ? `${randomFeedback} ${requiredWordsAnalysis}` 
-    : randomFeedback;
+  const enhancedFeedback = [
+    correctionsFeedback,
+    requiredWordsAnalysis,
+    randomFeedback
+  ].filter(Boolean).join(' ');
   
-  // Calculate a more representative score
+  // Calculate score with corrections impact
   let score = 70; // Base score
   
   // Adjust score based on response length
   if (userInput.length > 100) score += 10;
   if (userInput.length > 200) score += 5;
+  
+  // Adjust score based on correctness
+  const errorCount = corrections.pronunciation.length + corrections.grammar.length;
+  if (errorCount === 0) score += 15;
+  else if (errorCount <= 2) score += 10;
+  else if (errorCount <= 4) score += 5;
   
   // Adjust score based on required words usage
   const usedWordCount = requiredWords.filter(word => 
@@ -207,7 +240,7 @@ const generateFallbackResponse = (userInput: string, topicName: string, required
   ).length;
   
   if (usedWordCount > 0) {
-    score += Math.min(15, usedWordCount * 5); // Max 15 points for word usage
+    score += Math.min(15, usedWordCount * 5);
   }
   
   return {
@@ -221,8 +254,111 @@ const generateFallbackResponse = (userInput: string, topicName: string, required
         : undefined
     })),
     nextQuestion: randomQuestion,
-    score: Math.min(100, score) // Cap score at 100
+    score: Math.min(100, score),
+    corrections: corrections
   };
+};
+
+// Enhanced speech analysis function
+const analyzeUserSpeech = (userInput: string): {
+  pronunciation: string[],
+  grammar: string[],
+  suggestions: string[]
+} => {
+  const corrections = {
+    pronunciation: [] as string[],
+    grammar: [] as string[],
+    suggestions: [] as string[]
+  };
+  
+  // Common pronunciation mistakes
+  const pronunciationPatterns = [
+    { pattern: /\bfink\b/gi, correction: 'fink → think (use "th" sound)' },
+    { pattern: /\bdat\b/gi, correction: 'dat → that (use "th" sound)' },
+    { pattern: /\bdey\b/gi, correction: 'dey → they (use "th" sound)' },
+    { pattern: /\bdere\b/gi, correction: 'dere → there (use "th" sound)' },
+    { pattern: /\bcant\b/gi, correction: 'cant → can\'t (don\'t forget the apostrophe)' },
+    { pattern: /\bdont\b/gi, correction: 'dont → don\'t (don\'t forget the apostrophe)' },
+  ];
+  
+  for (const { pattern, correction } of pronunciationPatterns) {
+    if (pattern.test(userInput)) {
+      corrections.pronunciation.push(correction);
+    }
+  }
+  
+  // Grammar checks
+  const grammarPatterns = [
+    { pattern: /\bi is\b/gi, correction: 'Consider "I am" instead of "I is"' },
+    { pattern: /\bhe are\b|\bshe are\b|\bit are\b/gi, correction: 'Use "is" with he/she/it' },
+    { pattern: /\bthey is\b|\bwe is\b|\byou is\b/gi, correction: 'Use "are" with they/we/you' },
+    { pattern: /\bdid went\b|\bwas went\b/gi, correction: 'Use "went" without did/was' },
+    { pattern: /\bmore better\b|\bmore good\b/gi, correction: 'Use "better" instead of "more good"' },
+    { pattern: /\bvery much\b.*(?:like|love)\b/gi, correction: 'Consider "really like" or "love a lot"' },
+  ];
+  
+  for (const { pattern, correction } of grammarPatterns) {
+    if (pattern.test(userInput)) {
+      corrections.grammar.push(correction);
+    }
+  }
+  
+  // Suggestions for better expression
+  const words = userInput.toLowerCase().split(/\s+/);
+  if (words.length < 5) {
+    corrections.suggestions.push('Try expanding your answer with more details');
+  }
+  
+  if (!userInput.match(/because|since|due to|therefore|however|although/i)) {
+    corrections.suggestions.push('Consider using connecting words like "because" or "however"');
+  }
+  
+  if (!userInput.match(/\?|!/)) {
+    corrections.suggestions.push('You could add a question or exclamation to make it more engaging');
+  }
+  
+  return corrections;
+};
+
+// Enhanced feedback rendering component
+const FeedbackMessage: React.FC<{ corrections: any }> = ({ corrections }) => {
+  if (!corrections || (!corrections.pronunciation?.length && !corrections.grammar?.length && !corrections.suggestions?.length)) {
+    return null;
+  }
+
+  return (
+    <div className="mt-2 p-2 bg-blue-50 rounded border border-blue-200">
+      <p className="text-xs font-medium text-blue-800 mb-1">Learning Tip:</p>
+      {corrections.pronunciation?.map((tip: string, idx: number) => (
+        <p key={`p-${idx}`} className="text-xs text-blue-700">• {tip}</p>
+      ))}
+      {corrections.grammar?.map((tip: string, idx: number) => (
+        <p key={`g-${idx}`} className="text-xs text-blue-700">• {tip}</p>
+      ))}
+      {corrections.suggestions?.map((tip: string, idx: number) => (
+        <p key={`s-${idx}`} className="text-xs text-blue-700">• {tip}</p>
+      ))}
+    </div>
+  );
+};
+
+// Helper function to apply corrections inline
+const applyCorrectionHighlights = (text: string, corrections: any) => {
+  if (!corrections || !corrections.pronunciation?.length) return text;
+  
+  let highlightedText = text;
+  const patterns = [
+    { pattern: /\bfink\b/gi, replacement: '<span class="bg-yellow-100">fink</span>' },
+    { pattern: /\bdat\b/gi, replacement: '<span class="bg-yellow-100">dat</span>' },
+    { pattern: /\bdey\b/gi, replacement: '<span class="bg-yellow-100">dey</span>' },
+    { pattern: /\bdere\b/gi, replacement: '<span class="bg-yellow-100">dere</span>' },
+  ];
+  
+  patterns.forEach(({ pattern, replacement }) => {
+    highlightedText = highlightedText.replace(pattern, replacement);
+  });
+  
+  return highlightedText;
 };
 
 export default function ConversationPage() {
@@ -692,7 +828,9 @@ export default function ConversationPage() {
     requiredWords.forEach(word => {
       if (!word) return;
       const regex = new RegExp(`\\b${word}\\b`, 'gi');
-      highlightedText = highlightedText.replace(regex, `<span class="font-bold text-orange-600">$&</span>`);
+      highlightedText = highlightedText.replace(regex, `<span class="font-bold text-orange-600">        // טעינת תוכן הפוסט
+        try {
+          // טעינת תוכן ה</span>`);
     });
     return highlightedText;
   };
@@ -807,9 +945,55 @@ export default function ConversationPage() {
 
       // Process the response with the API
       const response = await analyzeResponse(transcript);
+      
+      // Add corrections as a temporary message if there are any
+      if (response.corrections && 
+        (Array.isArray(response.corrections.pronunciation) && response.corrections.pronunciation.length > 0 || 
+         Array.isArray(response.corrections.grammar) && response.corrections.grammar.length > 0 || 
+         Array.isArray(response.corrections.suggestions) && response.corrections.suggestions.length > 0)) {
+      
+      let correctionsText = "";
+      if (Array.isArray(response.corrections.pronunciation) && response.corrections.pronunciation.length > 0) {
+        correctionsText += `💡 Pronunciation: ${response.corrections.pronunciation[0]}\n`;
+      }
+      if (Array.isArray(response.corrections.grammar) && response.corrections.grammar.length > 0) {
+        correctionsText += `✍️ Grammar: ${response.corrections.grammar[0]}\n`;
+      }
+      if (Array.isArray(response.corrections.suggestions) && response.corrections.suggestions.length > 0) {
+        correctionsText += `💭 Suggestion: ${response.corrections.suggestions[0]}`;
+      }
+        
+        // Add temporary corrections message
+        setMessages(prev => {
+          const newMessages = [...prev];
+          const loadingIndex = newMessages.findIndex(m => 
+            m.type === 'ai' && m.content === '...' && m.feedback === 'Analyzing your response...'
+          );
+          
+          if (loadingIndex !== -1) {
+            newMessages.splice(loadingIndex, 1);
+          }
+          
+          return [
+            ...newMessages, 
+            { 
+              type: 'feedback', 
+              content: correctionsText,
+              feedback: 'Quick learning tip',
+              isTemporary: true
+            }
+          ];
+        });
+        
+        // Remove corrections message after 5 seconds
+        setTimeout(() => {
+          setMessages(prev => prev.filter(m => !m.isTemporary));
+        }, 5000);
+      }
+
       const combinedResponse = `${response.text}\n\n${response.nextQuestion}`;
 
-      // Remove loading indicator and add real response
+      // Remove loading indicator and add real response  
       setMessages(prev => {
         const newMessages = [...prev];
         const loadingIndex = newMessages.findIndex(m => 
@@ -826,7 +1010,8 @@ export default function ConversationPage() {
             type: 'ai', 
             content: combinedResponse, 
             feedback: response.feedback,
-            score: response.score
+            score: response.score,
+            corrections: response.corrections
           }
         ];
       });
@@ -848,7 +1033,8 @@ export default function ConversationPage() {
           JSON.stringify({
             feedback: response.feedback,
             score: response.score,
-            usedWords: response.usedWords
+            usedWords: response.usedWords,
+            corrections: response.corrections
           })
         );
       }
@@ -1080,14 +1266,14 @@ export default function ConversationPage() {
       // Check for rate limiting or temporary unavailability
       if (response.status === 429) {
         console.warn('Rate limit reached, using fallback response');
-        return generateFallbackResponse(userInput, topicName, requiredWords);
+        return generateFeedbackResponse(userInput, topicName, requiredWords);
       }
 
       // Handle general API errors
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         console.error('API response error:', response.status, errorData);
-        return generateFallbackResponse(userInput, topicName, requiredWords);
+        return generateFeedbackResponse(userInput, topicName, requiredWords);
       }
 
       try {
@@ -1096,17 +1282,23 @@ export default function ConversationPage() {
         // Validate API response format
         if (!data.text || !data.feedback || !data.nextQuestion) {
           console.error('Invalid API response format:', data);
-          return generateFallbackResponse(userInput, topicName, requiredWords);
+          return generateFeedbackResponse(userInput, topicName, requiredWords);
+        }
+        
+        // Enhance API response with our own corrections if not provided
+        if (!data.corrections) {
+          const corrections = analyzeUserSpeech(userInput);
+          data.corrections = corrections;
         }
         
         return data;
       } catch (parseError) {
         console.error('Error parsing API response:', parseError);
-        return generateFallbackResponse(userInput, topicName, requiredWords);
+        return generateFeedbackResponse(userInput, topicName, requiredWords);
       }
     } catch (error) {
       console.error('API request error:', error);
-      return generateFallbackResponse(userInput, topicName, requiredWords);
+      return generateFeedbackResponse(userInput, topicName, requiredWords);
     }
   };
 
@@ -1142,7 +1334,7 @@ export default function ConversationPage() {
       console.log(`Setting sessionId state to: ${createdSessionId}`);
       
       // Greeting message
-      const welcomeMessage = `Welcome to our conversation about ${formatTopicName(topicName)}! Let's practice English together.`;
+      const welcomeMessage = `Welcome to our conversation about ${formatTopicName(topicName)}! I'll help you practice English while giving you supportive feedback to improve your speaking skills. Let's begin!`;
       setMessages([{ type: 'ai', content: welcomeMessage }]);
       
       // Create first question
@@ -1255,25 +1447,25 @@ export default function ConversationPage() {
   const generateFirstQuestion = () => {
     const topic = topicName.toLowerCase();
     
-    if (topic.includes('diplomacy')) {
-      return `What do you think about Israel's diplomatic relations with other countries?`;
-    } else if (topic.includes('economy')) {
-      return `What interests you about Israel's economy or startup ecosystem?`;
-    } else if (topic.includes('innovation')) {
-      return `What Israeli technological innovations are you familiar with?`;
-    } else if (topic.includes('history')) {
-      return `What aspects of Israeli history do you find most interesting?`;
-    } else if (topic.includes('holocaust')) {
-      return `Why do you think it's important to remember historical events like the Holocaust?`;
-    } else if (topic.includes('iron') || topic.includes('sword')) {
-      return `What are your thoughts on how countries should protect their citizens?`;
-    } else if (topic.includes('environment')) {
-      return `What do you think about Israel's focus on renewable energy to protect the environment?`;
-    } else if (topic.includes('society')) {
-      return `What do you think is the most important action individuals can take to help protect the environment?`;
-    } else {
-      return `What aspects of ${formatTopicName(topicName)} interest you the most?`;
+    const questionMap: Record<string, string> = {
+      'diplomacy': `What do you think about Israel's diplomatic relations with other countries?`,
+      'economy': `What interests you about Israel's economy or startup ecosystem?`,
+      'innovation': `What Israeli technological innovations are you familiar with?`,
+      'history': `What aspects of Israeli history do you find most interesting?`,
+      'holocaust': `Why do you think it's important to remember historical events like the Holocaust?`,
+      'iron': `What are your thoughts on how countries should protect their citizens?`,
+      'sword': `What are your thoughts on how countries should protect their citizens?`,
+      'environment': `What do you think about Israel's focus on renewable energy to protect the environment?`,
+      'society': `What do you think is the most important action individuals can take to help protect the environment?`
+    };
+    
+    for (const [key, question] of Object.entries(questionMap)) {
+      if (topic.includes(key)) {
+        return question;
+      }
     }
+    
+    return `What aspects of ${formatTopicName(topicName)} interest you the most?`;
   };
 
   // Function to just stop the conversation audio without redirecting
@@ -1443,9 +1635,9 @@ export default function ConversationPage() {
         throw new Error('Authentication required');
       }
       
-      // Add completion message
+      // Add completion message with summary
       const completionMessage = 'Great job! You\'ve completed the conversation practice.';
-      const feedbackMessage = `Your average score: ${userProgress.averageScore}/100`;
+      const feedbackMessage = `Your average score: ${userProgress.averageScore}/100. You showed great improvement in your speaking skills!`;
       
       setMessages(prev => [
         ...prev,
@@ -1842,44 +2034,44 @@ export default function ConversationPage() {
     }
   }, []);
 
-// מצב טעינה
-if (authLoading || isLoading) {
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-yellow-50 via-orange-50 to-red-50 p-6 flex justify-center items-center">
-      <div className="text-center">
-        <div className="inline-block w-16 h-16 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-        <p className="text-xl font-medium text-gray-700">Loading conversation...</p>
-      </div>
-    </div>
-  );
-}
-
-// מצב שגיאה
-if (error) {
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-yellow-50 via-orange-50 to-red-50 p-6 flex justify-center items-center">
-      <div className="max-w-md w-full bg-white p-8 rounded-2xl shadow-xl text-center">
-        <div className="text-red-500 text-5xl mb-4">❌</div>
-        <h2 className="text-2xl font-bold text-gray-800 mb-4">{error}</h2>
-        <p className="text-gray-600 mb-6">We couldn't load the conversation at this time. Please try again later.</p>
-        <div className="flex flex-col gap-4">
-          <button
-            onClick={() => window.location.reload()}
-            className="px-6 py-3 bg-orange-500 text-white rounded-xl hover:bg-orange-600 transition-all duration-300"
-          >
-            Try Again
-          </button>
-          <Link 
-            href="#" 
-            className="px-6 py-3 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-all duration-300"
-          >
-            Back to Topics
-          </Link>
+  // מצב טעינה
+  if (authLoading || isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-yellow-50 via-orange-50 to-red-50 p-6 flex justify-center items-center">
+        <div className="text-center">
+          <div className="inline-block w-16 h-16 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+          <p className="text-xl font-medium text-gray-700">Loading conversation...</p>
         </div>
       </div>
-    </div>
-  );
-}
+    );
+  }
+
+  // מצב שגיאה
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-yellow-50 via-orange-50 to-red-50 p-6 flex justify-center items-center">
+        <div className="max-w-md w-full bg-white p-8 rounded-2xl shadow-xl text-center">
+          <div className="text-red-500 text-5xl mb-4">❌</div>
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">{error}</h2>
+          <p className="text-gray-600 mb-6">We couldn't load the conversation at this time. Please try again later.</p>
+          <div className="flex flex-col gap-4">
+            <button
+              onClick={() => window.location.reload()}
+              className="px-6 py-3 bg-orange-500 text-white rounded-xl hover:bg-orange-600 transition-all duration-300"
+            >
+              Try Again
+            </button>
+            <Link 
+              href="#" 
+              className="px-6 py-3 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-all duration-300"
+            >
+              Back to Topics
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-yellow-50 via-orange-50 to-red-50 p-6 relative">
@@ -1903,8 +2095,19 @@ if (error) {
             <h2 className="text-2xl font-bold text-gray-800 mb-4">Conversation Practice</h2>
             <p className="text-gray-600 mb-6">
               Practice speaking English about <span className="font-bold">{formatTopicName(topicName)}</span>. 
-              Our AI conversation partner will listen to you, provide feedback, and help you improve your speaking skills.
+              Our AI conversation partner will listen to your responses, provide real-time feedback on pronunciation, 
+              grammar, and fluency, while helping you improve your speaking skills naturally.
             </p>
+            
+            <div className="bg-blue-50 p-4 rounded-lg mb-6">
+              <h3 className="text-lg font-semibold text-blue-800 mb-2">What to expect:</h3>
+              <ul className="text-sm text-blue-700 text-left max-w-md mx-auto">
+                <li>• Real-time pronunciation hints</li>
+                <li>• Grammar suggestions</li>
+                <li>• Supportive feedback after each response</li>
+                <li>• Natural conversation flow</li>
+              </ul>
+            </div>
             
             {requiredWords.length > 0 && (
               <div className="mb-6">
@@ -1997,17 +2200,29 @@ if (error) {
                     className={`p-4 rounded-lg ${
                       message.type === 'user'
                         ? 'bg-orange-100 ml-12'
-                        : message.content.includes('Microphone is active')
-                          ? 'bg-red-50 border border-red-200'
-                          : 'bg-gray-100 mr-12'
+                        : message.type === 'feedback'
+                          ? 'bg-green-50 border border-green-200'
+                          : message.content.includes('Microphone is active')
+                            ? 'bg-red-50 border border-red-200'
+                            : 'bg-gray-100 mr-12'
                     }`}
                   >
+                    {message.type === 'feedback' && (
+                      <div className="flex items-start">
+                        <div className="text-green-500 mr-2 text-lg">💡</div>
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-green-700">Learning Feedback:</p>
+                          <p className="text-sm text-green-800 whitespace-pre-line">{message.content}</p>
+                        </div>
+                      </div>
+                    )}
+                    
                     {message.type === 'ai' && message.content.includes('Microphone is active') ? (
                       <div className="flex items-center">
                         <div className="w-6 h-6 bg-red-500 rounded-full animate-pulse mr-2"></div>
                         <p className="text-gray-800 font-medium">{message.content}</p>
                       </div>
-                    ) : (
+                    ) : message.type !== 'feedback' && (
                       <p 
                         className="text-gray-800"
                         dangerouslySetInnerHTML={{ 
@@ -2017,7 +2232,7 @@ if (error) {
                       ></p>
                     )}
                     
-                    {message.feedback && (
+                    {message.feedback && message.type !== 'feedback' && (
                       <p className="mt-2 text-sm text-orange-600 italic">
                         {message.feedback}
                       </p>
@@ -2066,40 +2281,8 @@ if (error) {
               </div>
               
               {/* Manual Skip Button for AI speech */}
-              {aiSpeaking && (
-                <div className="mt-4 flex justify-center">
-                  <button
-                    onClick={() => {
-                      // Cancel speech synthesis
-                      if (synthRef.current) {
-                        synthRef.current.cancel();
-                      }
-                      
-                      // Reset state
-                      setAiSpeaking(false);
-                      speakingUtteranceRef.current = null;
-                      
-                      // Add skip message
-                      setMessages(prev => [...prev, {
-                        type: 'ai',
-                        content: "Speech skipped. Your turn to speak.",
-                        feedback: "Manual skip"
-                      }]);
-                      
-                      // Set user's turn
-                      setTimeout(() => {
-                        setUserTurn(true);
-                        activateMicrophone();
-                      }, 500);
-                    }}
-                    className="px-4 py-2 bg-blue-500 text-white font-medium rounded-lg hover:bg-blue-600 transition-colors shadow-md"
-                  >
-                    Skip AI Speech
-                  </button>
-                </div>
-              )}
-              
-              {/* Add this just before the "Manual Skip Button for AI speech" section */}
+  
+              {/* Voice Settings */}
               {isActive && (
                 <div className="mt-4 bg-gray-50 p-3 rounded-lg border border-gray-200">
                   <h3 className="text-sm font-medium text-gray-700 mb-2">Voice Settings:</h3>
