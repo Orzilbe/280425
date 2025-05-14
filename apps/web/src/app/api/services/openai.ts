@@ -1,6 +1,6 @@
 // apps/web/src/app/services/openai.ts
 
-import { AzureOpenAI } from 'openai';
+import OpenAI from 'openai';
 import { v4 as uuidv4 } from 'uuid';
 
 // Log environment variables for debugging (redacted for security)
@@ -9,11 +9,11 @@ console.log('AZURE_OPENAI_API_KEY config:', process.env.AZURE_OPENAI_API_KEY ? '
 console.log('AZURE_OPENAI_DEPLOYMENT_NAME config:', process.env.AZURE_OPENAI_DEPLOYMENT_NAME);
 
 // Create OpenAI client with Azure configuration
-const openai = new AzureOpenAI({
-  apiKey: process.env.AZURE_OPENAI_API_KEY,
-  endpoint: process.env.AZURE_OPENAI_ENDPOINT,
-  deployment: process.env.AZURE_OPENAI_DEPLOYMENT_NAME,
-  apiVersion: "2024-04-01-preview"
+const openai = new OpenAI({
+  apiKey: process.env.AZURE_OPENAI_API_KEY || '',
+  baseURL: process.env.AZURE_OPENAI_ENDPOINT || '',
+  defaultQuery: { 'api-version': '2024-02-15-preview' },
+  defaultHeaders: { 'api-key': process.env.AZURE_OPENAI_API_KEY || '' }
 });
 
 export interface GeneratedWord {
@@ -38,7 +38,6 @@ export async function generateWords(englishLevel: string, topicName: string): Pr
     console.log('Making Azure OpenAI API request:');
     console.log('- Endpoint:', process.env.AZURE_OPENAI_ENDPOINT);
     console.log('- Deployment:', process.env.AZURE_OPENAI_DEPLOYMENT_NAME);
-    console.log('- API Version:', '2024-04-01-preview');
     
     // Send request to OpenAI
     const completion = await openai.chat.completions.create({
@@ -52,7 +51,7 @@ export async function generateWords(englishLevel: string, topicName: string): Pr
     });
     
     // Process the response
-    const responseText = completion.choices[0].message.content?.trim() || '';
+    const responseText = completion.choices[0].message?.content?.trim() || '';
     console.log('Azure OpenAI API response received successfully');
     
     // Parse the JSON response
