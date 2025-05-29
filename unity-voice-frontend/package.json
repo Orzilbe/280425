@@ -1,0 +1,51 @@
+{
+  "name": "unity-voice-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Unity Voice Learning Platform - Frontend",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@azure/identity": "^3.3.0",
+    "axios": "^1.8.4",
+    "jsonwebtoken": "^9.0.2",
+    "lucide-react": "^0.511.0",
+    "mysql2": "^3.11.3",
+    "next": "^15.3.2",
+    "openai": "^4.73.1",
+    "parse-json": "^8.3.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-icons": "^5.5.0",
+    "recharts": "^2.15.3",
+    "uuid": "^11.1.0"
+  },
+  "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.9",
+    "@types/node": "^20.10.5",
+    "@types/parse-json": "^4.0.2",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@types/uuid": "^10.0.0",
+    "autoprefixer": "^10.4.21",
+    "eslint": "^8.56.0",
+    "eslint-config-next": "^14.0.0",
+    "postcss": "^8.5.3",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.3.3"
+  },
+  "keywords": [
+    "nextjs",
+    "react",
+    "typescript",
+    "learning-platform",
+    "voice-recognition"
+  ],
+  "author": "Unity Voice Team",
+  "license": "MIT"
+}
