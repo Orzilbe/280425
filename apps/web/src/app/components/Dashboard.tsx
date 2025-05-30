@@ -79,11 +79,6 @@ interface DashboardData {
     completed_tasks: number;
     avg_score: number;
   }>;
-  userActivity: Array<{
-    date: string;
-    activities: number;
-    active_users: number;
-  }>;
   completionRates: Array<{ name: string; rate: number; color: string }>;
   weeklyActivity: Array<{
     day_name: string;
@@ -159,6 +154,14 @@ const Dashboard = () => {
   const [selectedTopic, setSelectedTopic] = useState("all");
   const [timeRange, setTimeRange] = useState("30d");
 
+  // State for User Activity Chart (now independent)
+  const [userActivityData, setUserActivityData] = useState<Array<{
+    date: string;
+    activities: number;
+    active_users: number;
+  }> | null>(null);
+  const [userActivityLoading, setUserActivityLoading] = useState(true);
+
   // Separate state for task completion chart
   const [taskCompletionData, setTaskCompletionData] = useState<{
     data: TaskCompletionTimeData[];
@@ -215,7 +218,6 @@ const Dashboard = () => {
           userStatsRes,
           usersByLevelRes,
           topicPopularityRes,
-          userActivityRes,
           completionRatesRes,
           advancedStatsRes,
         ] = await Promise.all([
@@ -224,7 +226,6 @@ const Dashboard = () => {
           fetch(`/api/dashboard/topic-popularity?topic=${selectedTopic}`, {
             headers,
           }),
-          fetch(`/api/dashboard/user-activity?range=${timeRange}`, { headers }),
           fetch("/api/dashboard/completion-rates", { headers }),
           fetch("/api/dashboard/advanced-stats", { headers }),
         ]);
@@ -234,7 +235,6 @@ const Dashboard = () => {
           !userStatsRes.ok ||
           !usersByLevelRes.ok ||
           !topicPopularityRes.ok ||
-          !userActivityRes.ok ||
           !completionRatesRes.ok ||
           !advancedStatsRes.ok
         ) {
@@ -246,14 +246,12 @@ const Dashboard = () => {
           userStats,
           usersByLevel,
           topicPopularity,
-          userActivity,
           completionRates,
           advancedStats,
         ] = await Promise.all([
           userStatsRes.json(),
           usersByLevelRes.json(),
           topicPopularityRes.json(),
-          userActivityRes.json(),
           completionRatesRes.json(),
           advancedStatsRes.json(),
         ]);
@@ -270,7 +268,6 @@ const Dashboard = () => {
           userStats: updatedUserStats,
           usersByLevel,
           topicPopularity,
-          userActivity,
           completionRates,
           weeklyActivity: advancedStats.weeklyActivity,
           trendForecast: advancedStats.trendForecast,
@@ -284,7 +281,38 @@ const Dashboard = () => {
     };
 
     fetchData();
-  }, [isAuthenticated, selectedTopic, timeRange]);
+  }, [isAuthenticated, selectedTopic]);
+
+  // Fetch User Activity Data (now independent)
+  const fetchUserActivityData = async (currentRange: string) => {
+    if (!isAuthenticated) return;
+    try {
+      setUserActivityLoading(true);
+      const token = localStorage.getItem("token");
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await fetch(
+        `/api/dashboard/user-activity?range=${currentRange}`,
+        { headers }
+      );
+      if (!res.ok) throw new Error("Failed to fetch user activity");
+      const data = await res.json();
+      setUserActivityData(data);
+    } catch (err) {
+      console.error("Error fetching user activity data:", err);
+      // Avoid overwriting general error with user activity specific error if one already exists
+      if (!error) {
+        setError("שגיאה בטעינת נתוני פעילות משתמשים.");
+      }
+    } finally {
+      setUserActivityLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchUserActivityData(timeRange);
+    }
+  }, [isAuthenticated, timeRange]);
 
   // Separate function for task completion data
   const fetchTaskCompletionData = async (
@@ -524,16 +552,6 @@ const Dashboard = () => {
                   Society and Multiculturalism
                 </option>
               </select>
-              <select
-                value={timeRange}
-                onChange={(e) => setTimeRange(e.target.value)}
-                className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="7d">7 ימים</option>
-                <option value="30d">30 ימים</option>
-                <option value="90d">90 ימים</option>
-                <option value="1y">שנה</option>
-              </select>
             </div>
 
             {/* כפתורי ייצוא */}
@@ -670,14 +688,29 @@ const Dashboard = () => {
         </div>
 
         {/* פעילות לאורך זמן */}
-        {data?.userActivity && (
-          <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-            <h2 className="text-lg font-semibold mb-4">
-              פעילות משתמשים לאורך זמן
-            </h2>
+        <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-semibold">פעילות משתמשים לאורך זמן</h2>
+            <select
+              value={timeRange}
+              onChange={(e) => setTimeRange(e.target.value)}
+              className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="7d">7 ימים</option>
+              <option value="30d">30 ימים</option>
+              <option value="90d">90 ימים</option>
+              <option value="1y">שנה</option>
+            </select>
+          </div>
+          {userActivityLoading ? (
+            <div className="h-80 flex items-center justify-center">
+              <RefreshCw className="h-8 w-8 animate-spin text-blue-500" />
+              <p className="ml-2 text-gray-600">טוען נתוני פעילות...</p>
+            </div>
+          ) : userActivityData && userActivityData.length > 0 ? (
             <div className="h-80">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={data.userActivity}>
+                <LineChart data={userActivityData}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="date" />
                   <YAxis />
@@ -702,8 +735,15 @@ const Dashboard = () => {
                 </LineChart>
               </ResponsiveContainer>
             </div>
-          </div>
-        )}
+          ) : (
+            <div className="h-80 flex items-center justify-center">
+              <BarChart3 className="h-12 w-12 text-gray-400 mx-auto mb-2" />
+              <p className="text-gray-600">
+                אין נתוני פעילות להצגה עבור טווח הזמן שנבחר.
+              </p>
+            </div>
+          )}
+        </div>
 
         {/* זמן השלמת משימות */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-8">
