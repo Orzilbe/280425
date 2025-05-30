@@ -713,7 +713,7 @@ const Dashboard = () => {
                 <LineChart data={userActivityData}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="date" />
-                  <YAxis />
+                  <YAxis tickMargin={20} />
                   <Tooltip />
                   <Legend
                     formatter={(value) =>
@@ -831,6 +831,7 @@ const Dashboard = () => {
                         angle: -90,
                         position: "outside",
                         offset: -60,
+                        dx: -20,
                         style: {
                           textAnchor: "middle",
                           fill: "#374151",
@@ -845,7 +846,7 @@ const Dashboard = () => {
                       }}
                       axisLine={{ stroke: "#374151", strokeWidth: 1 }}
                       tickLine={{ stroke: "#374151", strokeWidth: 1 }}
-                      tickMargin={10}
+                      tickMargin={30}
                       width={80}
                     />
                     <Tooltip
@@ -1052,6 +1053,7 @@ const Dashboard = () => {
                         angle: -90,
                         position: "outside",
                         offset: -60,
+                        dx: -30,
                         style: {
                           textAnchor: "middle",
                           fill: "#374151",
@@ -1066,7 +1068,7 @@ const Dashboard = () => {
                       }}
                       axisLine={{ stroke: "#374151", strokeWidth: 1 }}
                       tickLine={{ stroke: "#374151", strokeWidth: 1 }}
-                      tickMargin={23}
+                      tickMargin={45}
                       width={80}
                       domain={[0, 100]}
                     />
