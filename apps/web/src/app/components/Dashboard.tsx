@@ -50,6 +50,13 @@ interface TaskCompletionTimeData {
   userCount: number;
 }
 
+interface TaskAverageScoreData {
+  ageRange: string;
+  avgScore: number;
+  taskCount: number;
+  userCount: number;
+}
+
 interface TaskTypeOption {
   value: string;
   label: string;
@@ -163,6 +170,18 @@ const Dashboard = () => {
   const [taskCompletionLoading, setTaskCompletionLoading] = useState(false);
   const [chartTaskType, setChartTaskType] = useState("all");
   const [chartEnglishLevel, setChartEnglishLevel] = useState("all");
+
+  // Separate state for task average score chart
+  const [taskAverageScoreData, setTaskAverageScoreData] = useState<{
+    data: TaskAverageScoreData[];
+    taskTypes: TaskTypeOption[];
+    englishLevels: EnglishLevelOption[];
+    selectedTaskType: string;
+    selectedEnglishLevel: string;
+  } | null>(null);
+  const [taskAverageScoreLoading, setTaskAverageScoreLoading] = useState(false);
+  const [scoreChartTaskType, setScoreChartTaskType] = useState("all");
+  const [scoreChartEnglishLevel, setScoreChartEnglishLevel] = useState("all");
 
   const { isAuthenticated, isLoading, user } = useAuth();
   const router = useRouter();
@@ -317,6 +336,58 @@ const Dashboard = () => {
   // Handle chart English level change
   const handleChartEnglishLevelChange = (newEnglishLevel: string) => {
     setChartEnglishLevel(newEnglishLevel);
+  };
+
+  // Separate function for task average score data
+  const fetchTaskAverageScoreData = async (
+    taskType: string,
+    englishLevel: string = "all"
+  ) => {
+    if (!isAuthenticated) return;
+
+    try {
+      setTaskAverageScoreLoading(true);
+
+      const token = localStorage.getItem("token");
+      const headers = {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      };
+
+      const response = await fetch(
+        `/api/dashboard/task-average-score?taskType=${taskType}&englishLevel=${englishLevel}`,
+        { headers }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch task average score data");
+      }
+
+      const taskAverageScore = await response.json();
+      setTaskAverageScoreData(taskAverageScore);
+    } catch (error) {
+      console.error("Error fetching task average score data:", error);
+      setError("שגיאה בטעינת נתוני ציוני המשימות.");
+    } finally {
+      setTaskAverageScoreLoading(false);
+    }
+  };
+
+  // Load task average score data on mount and when filters change
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchTaskAverageScoreData(scoreChartTaskType, scoreChartEnglishLevel);
+    }
+  }, [isAuthenticated, scoreChartTaskType, scoreChartEnglishLevel]);
+
+  // Handle score chart task type change
+  const handleScoreChartTaskTypeChange = (newTaskType: string) => {
+    setScoreChartTaskType(newTaskType);
+  };
+
+  // Handle score chart English level change
+  const handleScoreChartEnglishLevelChange = (newEnglishLevel: string) => {
+    setScoreChartEnglishLevel(newEnglishLevel);
   };
 
   // פונקציה לייצוא נתונים
@@ -843,6 +914,230 @@ const Dashboard = () => {
                           ? ` לרמת אנגלית ${chartEnglishLevel}`
                           : ""
                       } שהושלמו עם נתוני זמן`}
+                </p>
+                <p className="text-gray-400 text-sm mt-3">
+                  נסה לשנות את הפילטרים או לחזור מאוחר יותר
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ציון ממוצע למשימות */}
+        <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-semibold">
+              ציון ממוצע למשימות לפי רמת אנגלית וטווח גילאים
+            </h2>
+
+            {/* Filter for this chart only */}
+            <div className="flex items-center gap-4">
+              <label className="text-sm text-gray-600">רמת אנגלית:</label>
+              <select
+                value={scoreChartEnglishLevel}
+                onChange={(e) =>
+                  handleScoreChartEnglishLevelChange(e.target.value)
+                }
+                className="px-3 py-1 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                disabled={taskAverageScoreLoading}
+              >
+                <option value="all">כל הרמות</option>
+                {taskAverageScoreData?.englishLevels?.map((level) => (
+                  <option key={level.value} value={level.value}>
+                    {level.label}
+                  </option>
+                ))}
+              </select>
+
+              <label className="text-sm text-gray-600">סוג משימה:</label>
+              <select
+                value={scoreChartTaskType}
+                onChange={(e) => handleScoreChartTaskTypeChange(e.target.value)}
+                className="px-3 py-1 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                disabled={taskAverageScoreLoading}
+              >
+                <option value="all">כל סוגי המשימות</option>
+                {taskAverageScoreData?.taskTypes?.map((taskType) => (
+                  <option key={taskType.value} value={taskType.value}>
+                    {taskType.label}
+                  </option>
+                ))}
+              </select>
+              {taskAverageScoreLoading && (
+                <RefreshCw className="h-4 w-4 animate-spin text-blue-500" />
+              )}
+            </div>
+          </div>
+
+          {taskAverageScoreLoading ? (
+            <div className="h-[600px] flex items-center justify-center">
+              <div className="text-center">
+                <RefreshCw className="h-10 w-10 animate-spin text-blue-500 mx-auto mb-3" />
+                <p className="text-gray-700 font-medium text-lg">
+                  טוען נתוני ציוני משימות...
+                </p>
+                <p className="text-gray-500 text-sm mt-1">
+                  אנא המתן בזמן שאנו מעבדים את הנתונים
+                </p>
+              </div>
+            </div>
+          ) : taskAverageScoreData?.data &&
+            taskAverageScoreData.data.length > 0 ? (
+            <>
+              <div className="h-[600px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={taskAverageScoreData.data}
+                    margin={{ top: 50, right: 40, left: 80, bottom: 0 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis
+                      dataKey="ageRange"
+                      angle={0}
+                      textAnchor="end"
+                      height={150}
+                      interval={0}
+                      tick={{
+                        fontSize: 14,
+                        fill: "#374151",
+                        fontWeight: 500,
+                      }}
+                      axisLine={{ stroke: "#374151", strokeWidth: 1 }}
+                      tickLine={{ stroke: "#374151", strokeWidth: 1 }}
+                      tickMargin={10}
+                    />
+                    <YAxis
+                      label={{
+                        value: "ציון ממוצע",
+                        angle: -90,
+                        position: "outside",
+                        offset: -60,
+                        style: {
+                          textAnchor: "middle",
+                          fill: "#374151",
+                          fontSize: "14px",
+                          fontWeight: 500,
+                        },
+                      }}
+                      tick={{
+                        fontSize: 14,
+                        fill: "#374151",
+                        fontWeight: 500,
+                      }}
+                      axisLine={{ stroke: "#374151", strokeWidth: 1 }}
+                      tickLine={{ stroke: "#374151", strokeWidth: 1 }}
+                      tickMargin={23}
+                      width={80}
+                      domain={[0, 100]}
+                    />
+                    <Tooltip
+                      formatter={(value: number, name: string) => [
+                        `${value.toFixed(1)} נקודות`,
+                        "ציון ממוצע",
+                      ]}
+                      labelFormatter={(label: string) =>
+                        `טווח גילאים: ${label}`
+                      }
+                      contentStyle={{
+                        backgroundColor: "#ffffff",
+                        border: "2px solid #e5e7eb",
+                        borderRadius: "8px",
+                        boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1)",
+                        fontSize: "14px",
+                        fontWeight: 500,
+                      }}
+                    />
+                    <Bar
+                      dataKey="avgScore"
+                      fill="#10b981"
+                      radius={[6, 6, 0, 0]}
+                      stroke="#059669"
+                      strokeWidth={1}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* טבלת מידע נוסף */}
+              <div className="mt-8 overflow-x-auto">
+                <h3 className="text-md font-semibold text-gray-800 mb-4">
+                  פירוט נתונים
+                </h3>
+                <table className="min-w-full divide-y divide-gray-200 shadow-sm border border-gray-200 rounded-lg">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-4 text-right text-sm font-semibold text-gray-700 uppercase tracking-wider">
+                        טווח גילאים
+                      </th>
+                      <th className="px-6 py-4 text-right text-sm font-semibold text-gray-700 uppercase tracking-wider">
+                        ציון ממוצע
+                      </th>
+                      <th className="px-6 py-4 text-right text-sm font-semibold text-gray-700 uppercase tracking-wider">
+                        מספר משימות
+                      </th>
+                      <th className="px-6 py-4 text-right text-sm font-semibold text-gray-700 uppercase tracking-wider">
+                        מספר משתמשים
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {taskAverageScoreData.data.map((item, index) => (
+                      <tr
+                        key={index}
+                        className={
+                          index % 2 === 0
+                            ? "bg-white hover:bg-gray-50"
+                            : "bg-gray-50 hover:bg-gray-100"
+                        }
+                      >
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
+                          {item.ageRange}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                          <span
+                            className={`px-3 py-1 inline-flex text-sm leading-5 font-semibold rounded-full ${
+                              item.avgScore >= 80
+                                ? "bg-green-100 text-green-800"
+                                : item.avgScore >= 70
+                                ? "bg-yellow-100 text-yellow-800"
+                                : "bg-red-100 text-red-800"
+                            }`}
+                          >
+                            {item.avgScore.toFixed(1)}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 font-medium">
+                          {item.taskCount.toLocaleString()}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 font-medium">
+                          {item.userCount.toLocaleString()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          ) : (
+            <div className="h-[500px] flex items-center justify-center">
+              <div className="text-center">
+                <BarChart3 className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-700 text-xl mb-2 font-semibold">
+                  אין נתונים זמינים
+                </p>
+                <p className="text-gray-500 text-base max-w-md mx-auto">
+                  {scoreChartTaskType === "all" &&
+                  scoreChartEnglishLevel === "all"
+                    ? "לא נמצאו משימות שהושלמו עם ציונים"
+                    : `לא נמצאו משימות${
+                        scoreChartTaskType !== "all"
+                          ? ` מסוג ${scoreChartTaskType}`
+                          : ""
+                      }${
+                        scoreChartEnglishLevel !== "all"
+                          ? ` לרמת אנגלית ${scoreChartEnglishLevel}`
+                          : ""
+                      } שהושלמו עם ציונים`}
                 </p>
                 <p className="text-gray-400 text-sm mt-3">
                   נסה לשנות את הפילטרים או לחזור מאוחר יותר
