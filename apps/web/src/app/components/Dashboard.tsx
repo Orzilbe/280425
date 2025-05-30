@@ -110,8 +110,8 @@ const StatCard = ({
   title: string;
   value: string;
   icon: React.ElementType;
-  change: number;
-  changeType: string;
+  change?: number;
+  changeType?: string;
 }) => (
   <div className="bg-white rounded-lg shadow-md p-6">
     <div className="flex items-center justify-between mb-2">
@@ -120,7 +120,7 @@ const StatCard = ({
     </div>
     <div className="flex items-baseline">
       <p className="text-2xl font-bold text-gray-900">{value}</p>
-      {change !== undefined && (
+      {change !== undefined && changeType !== undefined && (
         <p
           className={`ml-2 text-sm font-medium ${
             changeType === "positive" ? "text-green-600" : "text-red-600"
@@ -581,37 +581,16 @@ const Dashboard = () => {
               title="סה״כ משתמשים"
               value={data.userStats.totalUsers?.toLocaleString() || "0"}
               icon={Users}
-              change={data.userStats.userGrowth}
-              changeType={
-                data.userStats.userGrowth >= 0 ? "positive" : "negative"
-              }
             />
             <StatCard
               title="משתמשים פעילים"
               value={data.userStats.activeUsers?.toLocaleString() || "0"}
               icon={Activity}
-              change={data.userStats.activityChange}
-              changeType={
-                data.userStats.activityChange >= 0 ? "positive" : "negative"
-              }
             />
             <StatCard
               title="משתמשים חדשים החודש"
               value={String(data.userStats.newUsersThisMonth || 0)}
               icon={Calendar}
-              change={data.userStats.newUserGrowth}
-              changeType={
-                data.userStats.newUserGrowth >= 0 ? "positive" : "negative"
-              }
-            />
-            <StatCard
-              title="ציון ממוצע"
-              value={String(data.userStats.averageScore || 0)}
-              icon={TrendingUp}
-              change={data.userStats.scoreChange}
-              changeType={
-                data.userStats.scoreChange >= 0 ? "positive" : "negative"
-              }
             />
           </div>
         )}
@@ -666,7 +645,7 @@ const Dashboard = () => {
                   <BarChart data={data.topicPopularity}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="TopicHe" />
-                    <YAxis />
+                    <YAxis tickMargin={20} />
                     <Tooltip
                       formatter={(value, name) => [
                         value,
@@ -803,18 +782,18 @@ const Dashboard = () => {
             </div>
           ) : taskCompletionData?.data && taskCompletionData.data.length > 0 ? (
             <>
-              <div className="h-[600px]">
+              <div className="h-[350px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
                     data={taskCompletionData.data}
-                    margin={{ top: 50, right: 40, left: 80, bottom: 0 }}
+                    margin={{ top: 50, right: 40, left: 80, bottom: 50 }}
                   >
                     <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                     <XAxis
                       dataKey="ageRange"
                       angle={0}
                       textAnchor="end"
-                      height={150}
+                      height={50}
                       interval={0}
                       tick={{
                         fontSize: 14,
@@ -1025,18 +1004,18 @@ const Dashboard = () => {
           ) : taskAverageScoreData?.data &&
             taskAverageScoreData.data.length > 0 ? (
             <>
-              <div className="h-[600px]">
+              <div className="h-[350px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
                     data={taskAverageScoreData.data}
-                    margin={{ top: 50, right: 40, left: 80, bottom: 0 }}
+                    margin={{ top: 50, right: 40, left: 80, bottom: 50 }}
                   >
                     <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                     <XAxis
                       dataKey="ageRange"
                       angle={0}
                       textAnchor="end"
-                      height={150}
+                      height={50}
                       interval={0}
                       tick={{
                         fontSize: 14,
