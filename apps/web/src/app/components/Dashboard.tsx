@@ -100,6 +100,29 @@ interface DashboardData {
   };
 }
 
+interface LevelDurationPerformanceChartData {
+  Level: number;
+  [ageRange: string]: number | null;
+}
+
+// New interface for Level Duration Performance Chart
+interface LevelDurationPerformanceRawData {
+  Level: number;
+  AgeRange: string;
+  avgDuration: number | null;
+}
+
+interface LevelDurationByEnglishLevelRawData {
+  Level: number;
+  EnglishLevel: string;
+  avgDuration: number | null;
+}
+
+interface LevelDurationByEnglishLevelChartData {
+  Level: number;
+  [englishLevel: string]: number | null;
+}
+
 // קומפוננטה לכרטיס סטטיסטיקה
 const StatCard = ({
   title,
@@ -317,6 +340,26 @@ const Dashboard = () => {
 
   // State for the new Topic Metrics Table filter
   const [topicMetricsTableFilter, setTopicMetricsTableFilter] = useState("all");
+
+  // New states for Level Duration Performance Chart
+  const [levelDurationData, setLevelDurationData] = useState<
+    LevelDurationPerformanceRawData[] | null
+  >(null);
+  const [levelDurationLoading, setLevelDurationLoading] = useState(false);
+  const [levelDurationChartTaskType, setLevelDurationChartTaskType] =
+    useState("");
+
+  // New states for Level Duration by English Level Chart
+  const [levelDurationByEnglishLevelData, setLevelDurationByEnglishLevelData] =
+    useState<LevelDurationByEnglishLevelRawData[] | null>(null);
+  const [
+    levelDurationByEnglishLevelLoading,
+    setLevelDurationByEnglishLevelLoading,
+  ] = useState(false);
+  const [
+    levelDurationByEnglishLevelChartTaskType,
+    setLevelDurationByEnglishLevelChartTaskType,
+  ] = useState("");
 
   const { isAuthenticated, isLoading, user } = useAuth();
   const router = useRouter();
@@ -984,6 +1027,196 @@ const Dashboard = () => {
     "#00C49F",
     "#FFBB28",
   ];
+
+  // Derived data for Level Duration Performance Chart (pivot raw data)
+  const pivotedLevelDurationData = useMemo(() => {
+    if (!levelDurationData || levelDurationData.length === 0) return [];
+    const ageRanges = Array.from(
+      new Set(levelDurationData.map((d) => d.AgeRange))
+    ).sort();
+    const levels = Array.from(
+      new Set(levelDurationData.map((d) => d.Level))
+    ).sort((a, b) => a - b);
+    const chartData: LevelDurationPerformanceChartData[] = levels.map(
+      (level) => {
+        const levelRow: LevelDurationPerformanceChartData = { Level: level };
+        ageRanges.forEach((ageRange) => {
+          const entry = levelDurationData.find(
+            (d) => d.Level === level && d.AgeRange === ageRange
+          );
+          levelRow[ageRange] = entry ? entry.avgDuration : null;
+        });
+        return levelRow;
+      }
+    );
+    return chartData;
+  }, [levelDurationData]);
+
+  // Derived data for Level Duration by English Level Chart
+  const pivotedLevelDurationByEnglishLevelData = useMemo(() => {
+    if (
+      !levelDurationByEnglishLevelData ||
+      levelDurationByEnglishLevelData.length === 0
+    )
+      return [];
+    const englishLevels = Array.from(
+      new Set(levelDurationByEnglishLevelData.map((d) => d.EnglishLevel))
+    ).sort();
+    const levels = Array.from(
+      new Set(levelDurationByEnglishLevelData.map((d) => d.Level))
+    ).sort((a, b) => a - b);
+    const chartData: LevelDurationByEnglishLevelChartData[] = levels.map(
+      (level) => {
+        const levelRow: LevelDurationByEnglishLevelChartData = { Level: level };
+        englishLevels.forEach((engLevel) => {
+          const entry = levelDurationByEnglishLevelData.find(
+            (d) => d.Level === level && d.EnglishLevel === engLevel
+          );
+          levelRow[engLevel] = entry ? entry.avgDuration : null;
+        });
+        return levelRow;
+      }
+    );
+    return chartData;
+  }, [levelDurationByEnglishLevelData]);
+
+  // Fetch Level Duration Performance Data
+  const fetchLevelDurationPerformanceData = async (taskType: string) => {
+    if (!isAuthenticated || !taskType || taskType === "all") {
+      setLevelDurationData(null);
+      return;
+    }
+    try {
+      setLevelDurationLoading(true);
+      const token = localStorage.getItem("token");
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await fetch(
+        `/api/dashboard/level-duration-performance?taskType=${taskType}`,
+        { headers }
+      );
+      if (!res.ok)
+        throw new Error("Failed to fetch level duration performance data");
+      const data: LevelDurationPerformanceRawData[] = await res.json();
+      setLevelDurationData(data);
+    } catch (err) {
+      console.error("Error fetching level duration performance data:", err);
+      if (!error) {
+        setError("שגיאה בטעינת נתוני משך משימה לפי רמה.");
+      }
+      setLevelDurationData(null);
+    } finally {
+      setLevelDurationLoading(false);
+    }
+  };
+
+  // Fetch Level Duration by English Level Data
+  const fetchLevelDurationByEnglishLevelData = async (taskType: string) => {
+    if (!isAuthenticated || !taskType || taskType === "all") {
+      setLevelDurationByEnglishLevelData(null);
+      return;
+    }
+    try {
+      setLevelDurationByEnglishLevelLoading(true);
+      const token = localStorage.getItem("token");
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await fetch(
+        `/api/dashboard/level-duration-by-english-level?taskType=${taskType}`,
+        { headers }
+      );
+      if (!res.ok)
+        throw new Error("Failed to fetch level duration by English level data");
+      const data: LevelDurationByEnglishLevelRawData[] = await res.json();
+      setLevelDurationByEnglishLevelData(data);
+    } catch (err) {
+      console.error(
+        "Error fetching level duration by English level data:",
+        err
+      );
+      if (!error) {
+        setError("שגיאה בטעינת נתוני משך משימה לפי רמת אנגלית.");
+      }
+      setLevelDurationByEnglishLevelData(null);
+    } finally {
+      setLevelDurationByEnglishLevelLoading(false);
+    }
+  };
+
+  // Effect to fetch level duration data when the selected task type changes
+  useEffect(() => {
+    if (isAuthenticated && levelDurationChartTaskType) {
+      fetchLevelDurationPerformanceData(levelDurationChartTaskType);
+    } else if (
+      !levelDurationChartTaskType &&
+      taskCompletionData?.taskTypes &&
+      taskCompletionData.taskTypes.length > 0
+    ) {
+      const firstTaskType = taskCompletionData.taskTypes.find(
+        (tt) => tt.value !== "all"
+      );
+      if (firstTaskType) {
+        setLevelDurationChartTaskType(firstTaskType.value);
+      }
+    }
+  }, [
+    isAuthenticated,
+    levelDurationChartTaskType,
+    taskCompletionData?.taskTypes,
+  ]);
+
+  // Effect to fetch level duration by English level data
+  useEffect(() => {
+    if (isAuthenticated && levelDurationByEnglishLevelChartTaskType) {
+      fetchLevelDurationByEnglishLevelData(
+        levelDurationByEnglishLevelChartTaskType
+      );
+    } else if (
+      !levelDurationByEnglishLevelChartTaskType &&
+      taskCompletionData?.taskTypes &&
+      taskCompletionData.taskTypes.length > 0
+    ) {
+      const firstTaskType = taskCompletionData.taskTypes.find(
+        (tt) => tt.value !== "all"
+      );
+      if (firstTaskType) {
+        setLevelDurationByEnglishLevelChartTaskType(firstTaskType.value);
+      }
+    }
+  }, [
+    isAuthenticated,
+    levelDurationByEnglishLevelChartTaskType,
+    taskCompletionData?.taskTypes,
+  ]);
+
+  // Effect to initialize duration chart task types
+  useEffect(() => {
+    if (
+      !levelDurationChartTaskType &&
+      taskCompletionData?.taskTypes &&
+      taskCompletionData.taskTypes.length > 0
+    ) {
+      const firstTaskType = taskCompletionData.taskTypes.find(
+        (tt) => tt.value !== "all"
+      );
+      if (firstTaskType) {
+        setLevelDurationChartTaskType(firstTaskType.value);
+      }
+    }
+  }, [taskCompletionData?.taskTypes, levelDurationChartTaskType]);
+
+  useEffect(() => {
+    if (
+      !levelDurationByEnglishLevelChartTaskType &&
+      taskCompletionData?.taskTypes &&
+      taskCompletionData.taskTypes.length > 0
+    ) {
+      const firstTaskType = taskCompletionData.taskTypes.find(
+        (tt) => tt.value !== "all"
+      );
+      if (firstTaskType) {
+        setLevelDurationByEnglishLevelChartTaskType(firstTaskType.value);
+      }
+    }
+  }, [taskCompletionData?.taskTypes, levelDurationByEnglishLevelChartTaskType]);
 
   if (isLoading || loading) {
     return (
@@ -1840,7 +2073,7 @@ const Dashboard = () => {
                     allowDataOverflow
                     tickCount={pivotedLevelScoreData.length}
                     label={{
-                      value: "רמה",
+                      value: "גיל",
                       position: "insideBottom",
                       offset: -15,
                       style: {
@@ -2276,6 +2509,266 @@ const Dashboard = () => {
             </div>
           )}
         </div>
+
+        {/* New Chart: Level Duration Performance by Age Range */}
+        <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-semibold">
+              משך משימה ממוצע לכל שלב לפי קבוצת גיל
+            </h2>
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-gray-600">סוג משימה:</label>
+              <select
+                value={levelDurationChartTaskType}
+                onChange={(e) => setLevelDurationChartTaskType(e.target.value)}
+                className="px-3 py-1 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                disabled={
+                  levelDurationLoading ||
+                  !taskCompletionData?.taskTypes ||
+                  taskCompletionData.taskTypes.length === 0
+                }
+              >
+                {taskCompletionData?.taskTypes
+                  ?.filter((tt) => tt.value !== "all")
+                  .map((taskType) => (
+                    <option key={taskType.value} value={taskType.value}>
+                      {taskType.label}
+                    </option>
+                  ))}
+                {(!taskCompletionData?.taskTypes ||
+                  taskCompletionData.taskTypes.filter(
+                    (tt) => tt.value !== "all"
+                  ).length === 0) && (
+                  <option value="" disabled>
+                    טוען סוגי משימות...
+                  </option>
+                )}
+              </select>
+              {levelDurationLoading && (
+                <RefreshCw className="h-4 w-4 animate-spin text-blue-500" />
+              )}
+            </div>
+          </div>
+          {levelDurationLoading ? (
+            <div className="h-80 flex items-center justify-center">
+              <RefreshCw className="h-8 w-8 animate-spin text-blue-500" />
+              <p className="ml-2 text-gray-600">טוען נתוני משך משימה...</p>
+            </div>
+          ) : pivotedLevelDurationData &&
+            pivotedLevelDurationData.length > 0 ? (
+            <div className="h-80">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart
+                  data={pivotedLevelDurationData}
+                  margin={{ top: 5, right: 30, left: 20, bottom: 25 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis
+                    dataKey="Level"
+                    type="number"
+                    domain={["dataMin", "dataMax"]}
+                    allowDataOverflow={false}
+                    interval={0}
+                    ticks={pivotedLevelDurationData.map(d => d.Level)}
+                    label={{
+                      value: "גיל",
+                      position: "insideBottom",
+                      offset: -15,
+                      style: {
+                        fill: "#374151",
+                        fontSize: "14px",
+                        fontWeight: 500,
+                      },
+                    }}
+                  />
+                  <YAxis
+                    domain={[0, "dataMax"]}
+                    tickMargin={35}
+                    label={{
+                      value: "משך ממוצע (דקות)",
+                      angle: -90,
+                      position: "insideLeft",
+                      style: {
+                        fill: "#374151",
+                        fontSize: "14px",
+                        fontWeight: "500",
+                      },
+                      offset: -5,
+                    }}
+                    tickFormatter={(value) =>
+                      typeof value === "number"
+                        ? (value / 60).toFixed(1)
+                        : value
+                    }
+                  />
+                  
+                  <Legend wrapperStyle={{ paddingTop: 20 }} />
+                  {levelDurationData &&
+                    Array.from(
+                      new Set(levelDurationData.map((d) => d.AgeRange))
+                    )
+                      .sort()
+                      .map((ageRange, index) => (
+                        <Line
+                          key={ageRange}
+                          type="monotone"
+                          dataKey={ageRange}
+                          stroke={ageRangeColors[index % ageRangeColors.length]}
+                          strokeWidth={2}
+                          name={ageRange || "לא ידוע"}
+                        />
+                      ))}
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="h-80 flex items-center justify-center">
+              <BarChart3 className="h-12 w-12 text-gray-400 mx-auto mb-2" />
+              <p className="text-gray-600">
+                {!levelDurationChartTaskType
+                  ? "אנא בחר סוג משימה."
+                  : `לא נמצאו נתונים עבור סוג משימה: ${levelDurationChartTaskType}.`}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* New Chart: Level Duration Performance by English Level */}
+        <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-semibold">
+              משך משימה ממוצע לכל שלב לפי רמת אנגלית
+            </h2>
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-gray-600">סוג משימה:</label>
+              <select
+                value={levelDurationByEnglishLevelChartTaskType}
+                onChange={(e) =>
+                  setLevelDurationByEnglishLevelChartTaskType(e.target.value)
+                }
+                className="px-3 py-1 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                disabled={
+                  levelDurationByEnglishLevelLoading ||
+                  !taskCompletionData?.taskTypes ||
+                  taskCompletionData.taskTypes.length === 0
+                }
+              >
+                {taskCompletionData?.taskTypes
+                  ?.filter((tt) => tt.value !== "all")
+                  .map((taskType) => (
+                    <option key={taskType.value} value={taskType.value}>
+                      {taskType.label}
+                    </option>
+                  ))}
+                {(!taskCompletionData?.taskTypes ||
+                  taskCompletionData.taskTypes.filter(
+                    (tt) => tt.value !== "all"
+                  ).length === 0) && (
+                  <option value="" disabled>
+                    טוען סוגי משימות...
+                  </option>
+                )}
+              </select>
+              {levelDurationByEnglishLevelLoading && (
+                <RefreshCw className="h-4 w-4 animate-spin text-blue-500" />
+              )}
+            </div>
+          </div>
+          {levelDurationByEnglishLevelLoading ? (
+            <div className="h-80 flex items-center justify-center">
+              <RefreshCw className="h-8 w-8 animate-spin text-blue-500" />
+              <p className="ml-2 text-gray-600">
+                טוען נתוני משך משימה לפי רמת אנגלית...
+              </p>
+            </div>
+          ) : pivotedLevelDurationByEnglishLevelData &&
+            pivotedLevelDurationByEnglishLevelData.length > 0 ? (
+            <div className="h-80">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart
+                  data={pivotedLevelDurationByEnglishLevelData}
+                  margin={{ top: 5, right: 30, left: 20, bottom: 25 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis
+                    dataKey="Level"
+                    type="number"
+                    domain={["dataMin", "dataMax"]}
+                    allowDataOverflow={false}
+                    interval={0}
+                    ticks={pivotedLevelDurationByEnglishLevelData.map(d => d.Level)}
+                    label={{
+                      value: "רמה",
+                      position: "insideBottom",
+                      offset: -15,
+                      style: {
+                        fill: "#374151",
+                        fontSize: "14px",
+                        fontWeight: 500,
+                      },
+                    }}
+                  />
+                  <YAxis
+                    domain={[0, "dataMax"]}
+                    tickMargin={35}
+                    label={{
+                      value: "משך ממוצע (דקות)",
+                      angle: -90,
+                      position: "insideLeft",
+                      style: {
+                        fill: "#374151",
+                        fontSize: "14px",
+                        fontWeight: "500",
+                      },
+                      offset: -5,
+                    }}
+                    tickFormatter={(value) =>
+                      typeof value === "number"
+                        ? (value / 60).toFixed(1)
+                        : value
+                    }
+                  />
+                  
+                  <Legend wrapperStyle={{ paddingTop: 20 }} />
+                  {levelDurationByEnglishLevelData &&
+                    Array.from(
+                      new Set(
+                        levelDurationByEnglishLevelData.map(
+                          (d) => d.EnglishLevel
+                        )
+                      )
+                    )
+                      .sort()
+                      .map((engLevel, index) => (
+                        <Line
+                          key={engLevel}
+                          type="monotone"
+                          dataKey={engLevel}
+                          stroke={
+                            englishLevelColors[
+                              index % englishLevelColors.length
+                            ]
+                          }
+                          strokeWidth={2}
+                          name={engLevel || "לא ידוע"}
+                        />
+                      ))}
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="h-80 flex items-center justify-center">
+              <BarChart3 className="h-12 w-12 text-gray-400 mx-auto mb-2" />
+              <p className="text-gray-600">
+                {!levelDurationByEnglishLevelChartTaskType
+                  ? "אנא בחר סוג משימה."
+                  : `לא נמצאו נתונים עבור סוג משימה: ${levelDurationByEnglishLevelChartTaskType}.`}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Task Metrics by Type Table */}
       </div>
     </div>
   );
